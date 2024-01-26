@@ -11,9 +11,6 @@ add_library(clogparser STATIC
 target_include_directories(clogparser PUBLIC
   "include_public")
 
-target_include_directories(clogparser PUBLIC
-  "include_private")
-
 target_link_libraries(clogparser PUBLIC common)
 
 target_compile_features(clogparser PUBLIC
