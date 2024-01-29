@@ -535,8 +535,12 @@ namespace clogparser {
           if constexpr (std::is_invocable_v<Cb, Timestamp, const First>) {
             std::array<std::string_view, First::COLUMNS_COUNT> columns;
             const auto parsed_columns = helpers::parse_array(columns, partial_parse.data);
+            const auto timestamp = partial_parse.time.parse();
+            if (!timestamp) { //we couldn't parse timestamp, just ignore this entry?
+              return;
+            }
             const First data = Parse<First>::parse(parsed_columns);
-            cb(partial_parse.time, data);
+            cb(*timestamp, data);
           } else {
             //do nothing
           }
