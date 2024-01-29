@@ -26,6 +26,11 @@ namespace clogparser {
     std::chrono::milliseconds operator-(Timestamp const& other) const noexcept;
   };
 
+  struct Unparsed_timestamp {
+    std::string_view raw;
+    std::optional<Timestamp> parse() const;
+  };
+
   constexpr bool is_invalid_guid(std::string_view in) {
     return in.empty() || in[0] == '0';
   }
@@ -451,39 +456,7 @@ namespace clogparser {
     constexpr std::size_t type = impl::variant_type_index<Choice, Type>;
   }
 
-  namespace internal {
-    struct String_hash {
-      using is_transparent = void;
-
-      std::size_t operator()(std::string const& str) const noexcept;
-      std::size_t operator()(std::string_view str) const noexcept;
-    };
-
-    struct String_eq {
-      using is_transparent = void;
-
-      template<typename T, typename U>
-      bool operator()(T const& t, U const& u) const noexcept {
-        return t == u;
-      }
-    };
-
-    struct Parse_state {
-      std::string saved;
-    };
-
-    struct Partial_parse {
-      Timestamp time;
-      std::string_view type;
-      std::string_view data;
-    };
-
-    using Columns = std::span<std::string_view>;
-
-    Columns parse_array(Columns returning, std::string_view in);
-
-    std::optional<Partial_parse> parse_line(Parse_state& columns, std::string_view in);
-
+  namespace helpers {
     template<typename T>
     void parseInt(T& returning, std::string_view in) {
       std::from_chars_result res;
@@ -510,9 +483,45 @@ namespace clogparser {
       return returning;
     }
 
+    using Columns_span = std::span<std::string_view>;
+
+    Columns_span parse_array(Columns_span returning, std::string_view in);
+    void parse_array(std::vector<std::string_view>& returning, std::string_view in);
+    std::vector<std::string_view> parse_array(std::string_view in);
+  }
+
+  namespace internal {
+    struct String_hash {
+      using is_transparent = void;
+
+      std::size_t operator()(std::string const& str) const noexcept;
+      std::size_t operator()(std::string_view str) const noexcept;
+    };
+
+    struct String_eq {
+      using is_transparent = void;
+
+      template<typename T, typename U>
+      bool operator()(T const& t, U const& u) const noexcept {
+        return t == u;
+      }
+    };
+
+    struct Parse_state {
+      std::string saved;
+    };
+
+    struct Partial_parse {
+      Unparsed_timestamp time;
+      std::string_view type;
+      std::string_view data;
+    };
+
+    std::optional<Partial_parse> parse_line(Parse_state& columns, std::string_view in);
+
     template<typename T>
     struct Parse {
-      static T parse(Columns);
+      static T parse(helpers::Columns_span);
     };
 
     template<typename T>
@@ -525,7 +534,7 @@ namespace clogparser {
         if (partial_parse.type == First::NAME) {
           if constexpr (std::is_invocable_v<Cb, Timestamp, const First>) {
             std::array<std::string_view, First::COLUMNS_COUNT> columns;
-            const auto parsed_columns = internal::parse_array(columns, partial_parse.data);
+            const auto parsed_columns = helpers::parse_array(columns, partial_parse.data);
             const First data = Parse<First>::parse(parsed_columns);
             cb(partial_parse.time, data);
           } else {
