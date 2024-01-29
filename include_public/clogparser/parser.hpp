@@ -26,11 +26,6 @@ namespace clogparser {
     std::chrono::milliseconds operator-(Timestamp const& other) const noexcept;
   };
 
-  struct Unparsed_timestamp {
-    std::string_view raw;
-    std::optional<Timestamp> parse() const;
-  };
-
   constexpr bool is_invalid_guid(std::string_view in) {
     return in.empty() || in[0] == '0';
   }
@@ -511,8 +506,10 @@ namespace clogparser {
       std::string saved;
     };
 
+    std::optional<Timestamp> parse_timestamp(std::string_view in);
+
     struct Partial_parse {
-      Unparsed_timestamp time;
+      std::string_view time;
       std::string_view type;
       std::string_view data;
     };
@@ -533,12 +530,12 @@ namespace clogparser {
       static void check(Partial_parse const& partial_parse, Cb&& cb) noexcept {
         if (partial_parse.type == First::NAME) {
           if constexpr (std::is_invocable_v<Cb, Timestamp, const First>) {
-            std::array<std::string_view, First::COLUMNS_COUNT> columns;
-            const auto parsed_columns = helpers::parse_array(columns, partial_parse.data);
-            const auto timestamp = partial_parse.time.parse();
+            const auto timestamp = parse_timestamp(partial_parse.time);
             if (!timestamp) { //we couldn't parse timestamp, just ignore this entry?
               return;
             }
+            std::array<std::string_view, First::COLUMNS_COUNT> columns;
+            const auto parsed_columns = helpers::parse_array(columns, partial_parse.data);
             const First data = Parse<First>::parse(parsed_columns);
             cb(*timestamp, data);
           } else {

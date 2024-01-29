@@ -61,59 +61,6 @@ namespace {
     return in;
   }
 
-  std::optional<clogparser::Timestamp> parse_timestamp(std::string_view time) {
-    try {
-      clogparser::Timestamp returning{ 0 };
-
-      const auto found_month = time.find('/');
-      if (found_month == time.npos) {
-        fprintf(stderr, "Timestamp is missing a month: %.*s\n", (std::uint32_t)time.size(), time.data());
-        return std::nullopt;
-      }
-      returning.month = clogparser::helpers::parseInt<std::uint8_t>(time.substr(0, found_month));
-      time = time.substr(found_month + 1);
-
-      const auto found_day = time.find(' ');
-      if (found_day == time.npos) {
-        fprintf(stderr, "Timestamp is missing a day: %.*s\n", (std::uint32_t)time.size(), time.data());
-        return std::nullopt;
-      }
-      returning.day = clogparser::helpers::parseInt<std::uint8_t>(time.substr(0, found_day));
-      time = time.substr(found_day + 1);
-
-      const auto found_hour = time.find(':');
-      if (found_hour == time.npos) {
-        fprintf(stderr, "Timestamp is missing an hour: %.*s\n", (std::uint32_t)time.size(), time.data());
-        return std::nullopt;
-      }
-      returning.hour = clogparser::helpers::parseInt<std::uint8_t>(time.substr(0, found_hour));
-      time = time.substr(found_hour + 1);
-
-      const auto found_minute = time.find(':');
-      if (found_minute == time.npos) {
-        fprintf(stderr, "Timestamp is missing a minute: %.*s\n", (std::uint32_t)time.size(), time.data());
-        return std::nullopt;
-      }
-      returning.minute = clogparser::helpers::parseInt<std::uint8_t>(time.substr(0, found_minute));
-      time = time.substr(found_minute + 1);
-
-      const auto found_second = time.find('.');
-      if (found_second == time.npos) {
-        fprintf(stderr, "Timestamp is missing a second: %.*s\n", (std::uint32_t)time.size(), time.data());
-        return std::nullopt;
-      }
-      returning.second = clogparser::helpers::parseInt<std::uint8_t>(time.substr(0, found_second));
-      time = time.substr(found_second + 1);
-
-      returning.millisecond = clogparser::helpers::parseInt<std::uint16_t>(time);
-
-      return returning;
-    } catch (std::exception const& ex) {
-      fprintf(stderr, "Couldn't parse timestamp due to exception: %s\n", ex.what());
-      return std::nullopt;
-    }
-  }
-
   std::vector<clogparser::Item> parse_items(std::string_view in) {
     std::vector<clogparser::Item> returning;
     const auto parsed_in = clogparser::helpers::parse_array(in);
@@ -389,6 +336,59 @@ std::vector<std::string_view> clogparser::helpers::parse_array(std::string_view 
   return returning;
 }
 
+std::optional<clogparser::Timestamp> clogparser::internal::parse_timestamp(std::string_view time) {
+  try {
+    clogparser::Timestamp returning{ 0 };
+
+    const auto found_month = time.find('/');
+    if (found_month == time.npos) {
+      fprintf(stderr, "Timestamp is missing a month: %.*s\n", (std::uint32_t)time.size(), time.data());
+      return std::nullopt;
+    }
+    returning.month = clogparser::helpers::parseInt<std::uint8_t>(time.substr(0, found_month));
+    time = time.substr(found_month + 1);
+
+    const auto found_day = time.find(' ');
+    if (found_day == time.npos) {
+      fprintf(stderr, "Timestamp is missing a day: %.*s\n", (std::uint32_t)time.size(), time.data());
+      return std::nullopt;
+    }
+    returning.day = clogparser::helpers::parseInt<std::uint8_t>(time.substr(0, found_day));
+    time = time.substr(found_day + 1);
+
+    const auto found_hour = time.find(':');
+    if (found_hour == time.npos) {
+      fprintf(stderr, "Timestamp is missing an hour: %.*s\n", (std::uint32_t)time.size(), time.data());
+      return std::nullopt;
+    }
+    returning.hour = clogparser::helpers::parseInt<std::uint8_t>(time.substr(0, found_hour));
+    time = time.substr(found_hour + 1);
+
+    const auto found_minute = time.find(':');
+    if (found_minute == time.npos) {
+      fprintf(stderr, "Timestamp is missing a minute: %.*s\n", (std::uint32_t)time.size(), time.data());
+      return std::nullopt;
+    }
+    returning.minute = clogparser::helpers::parseInt<std::uint8_t>(time.substr(0, found_minute));
+    time = time.substr(found_minute + 1);
+
+    const auto found_second = time.find('.');
+    if (found_second == time.npos) {
+      fprintf(stderr, "Timestamp is missing a second: %.*s\n", (std::uint32_t)time.size(), time.data());
+      return std::nullopt;
+    }
+    returning.second = clogparser::helpers::parseInt<std::uint8_t>(time.substr(0, found_second));
+    time = time.substr(found_second + 1);
+
+    returning.millisecond = clogparser::helpers::parseInt<std::uint16_t>(time);
+
+    return returning;
+  } catch (std::exception const& ex) {
+    fprintf(stderr, "Couldn't parse timestamp due to exception: %s\n", ex.what());
+    return std::nullopt;
+  }
+}
+
 std::optional<clogparser::internal::Partial_parse> clogparser::internal::parse_line(Parse_state& state, std::string_view in) {
   const auto end_timestamp = in.find("  ");
   if (end_timestamp == std::string_view::npos) {
@@ -411,7 +411,7 @@ std::optional<clogparser::internal::Partial_parse> clogparser::internal::parse_l
     return std::nullopt;
   }
 
-  return Partial_parse{ Unparsed_timestamp{timestamp_str}, type_str, in};
+  return Partial_parse{ timestamp_str, type_str, in};
 }
 
 void clogparser::helpers::parseInt(bool& returning, std::string_view in) {
