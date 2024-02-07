@@ -374,7 +374,7 @@ namespace clogparser {
 
     struct Combatant_info {
       static constexpr std::string_view NAME = "COMBATANT_INFO";
-      static constexpr std::size_t COLUMNS_COUNT = 2 + Stats{}.size() + 9;
+      static constexpr std::size_t COLUMNS_COUNT = 2 + Stats::size + 9;
       std::string_view guid;
       FactionId faction;
       Stats stats;
@@ -386,7 +386,11 @@ namespace clogparser {
       std::vector<Talent> talents;
       std::vector<std::string_view> pvp_talents;
       std::vector<Item> items;
-      std::vector<std::string_view> interesting_auras;
+      struct Interesting_aura {
+        std::string_view caster_guid;
+        std::uint64_t spell_id;
+      };
+      std::vector<Interesting_aura> interesting_auras;
       //pvp
       std::uint32_t honor_level;
       std::uint32_t season;
@@ -576,6 +580,7 @@ namespace clogparser {
     events::Spell_cast_success get(events::Spell_cast_success);
     events::Encounter_start get(events::Encounter_start);
     events::Encounter_end get(events::Encounter_end);
+    events::Combatant_info::Interesting_aura get(events::Combatant_info::Interesting_aura);
     events::Combatant_info get(events::Combatant_info);
     events::Spell_summon get(events::Spell_summon);
     events::Zone_change get(events::Zone_change);

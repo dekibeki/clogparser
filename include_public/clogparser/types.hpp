@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <array>
+#include <cassert>
 
 namespace clogparser {
   struct Unit_flags {
@@ -285,5 +286,48 @@ namespace clogparser {
     COUNT
   };
 
-  using Stats = std::array<std::int32_t, static_cast<std::uint8_t>(Attribute_rating::COUNT)>;
+  template<typename Indexer, typename T, Indexer _size>
+  struct Enum_indexed_array {
+    constexpr static std::size_t size = static_cast<std::underlying_type_t<Indexer>>(_size);
+
+    Enum_indexed_array() :
+      vals_{ T{} } {
+
+    }
+
+    Enum_indexed_array(std::initializer_list<T> init_list) {
+      assert(init_list.size() == size);
+      std::copy(init_list.begin(), init_list.end(), vals_.begin());
+    }
+
+    constexpr T& operator[](Indexer i) noexcept {
+      return vals_[static_cast<std::underlying_type_t<Indexer>>(i)];
+    }
+    constexpr T const& operator[](Indexer i) const noexcept {
+      return vals_[static_cast<std::underlying_type_t<Indexer>>(i)];
+    }
+
+    constexpr auto begin() noexcept {
+      return vals_.begin();
+    }
+    constexpr auto begin() const noexcept {
+      return vals_.begin();
+    }
+    constexpr auto cbegin() const noexcept {
+      return vals_.begin();
+    }
+    constexpr auto end() noexcept {
+      return vals_.end();
+    }
+    constexpr auto end() const noexcept {
+      return vals_.end();
+    }
+    constexpr auto cend() const noexcept {
+      return vals_.end();
+    }
+  private:
+    std::array<T, size> vals_;
+  };
+
+  using Stats = Enum_indexed_array<Attribute_rating, std::int32_t, Attribute_rating::COUNT>;
 }

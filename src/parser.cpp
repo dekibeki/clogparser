@@ -153,6 +153,28 @@ namespace {
 
     return returning;
   }
+
+  std::vector<events::Combatant_info::Interesting_aura> parse_interesting_auras(std::string_view in) {
+    std::vector<events::Combatant_info::Interesting_aura> returning;
+
+    const auto parsed_in = clogparser::helpers::parse_array(in);
+
+    if ((parsed_in.size() % 2) != 0) {
+      return returning;
+    }
+
+    returning.reserve(parsed_in.size() / 2);
+
+    for (std::size_t i = 0; i < parsed_in.size(); i += 2) {
+      returning.push_back(
+        events::Combatant_info::Interesting_aura{
+          parsed_in[i],
+          clogparser::helpers::parseInt<std::uint64_t>(parsed_in[i + 1])
+        });
+    }
+
+    return returning;
+  }
 }
 std::chrono::milliseconds clogparser::Timestamp::operator-(Timestamp const& other) const noexcept {
   const std::chrono::milliseconds us_duration = std::chrono::hours{ hour }
@@ -890,7 +912,7 @@ events::Combatant_info clogparser::internal::Parse<events::Combatant_info>::pars
     parse_talents(columns[24]),
     clogparser::helpers::parse_array(columns[25]),
     parse_items(columns[26]),
-    clogparser::helpers::parse_array(columns[27]),
+    parse_interesting_auras(columns[27]),
     helpers::parseInt<std::uint32_t>(columns[28]),
     helpers::parseInt<std::uint32_t>(columns[29]),
     helpers::parseInt<std::uint32_t>(columns[30]),
@@ -1080,6 +1102,12 @@ events::Encounter_end clogparser::String_store::get(events::Encounter_end in) {
     in.instance_size,
     in.success,
     in.instance_id
+  };
+}
+events::Combatant_info::Interesting_aura clogparser::String_store::get(events::Combatant_info::Interesting_aura in) {
+  return {
+    get(in.caster_guid),
+    in.spell_id
   };
 }
 events::Combatant_info clogparser::String_store::get(events::Combatant_info in) {
