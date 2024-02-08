@@ -7,37 +7,36 @@
 namespace clogparser {
   struct Unit_flags {
   public:
-    using Backing = std::uint32_t;
+    using Underlying = std::uint32_t;
 
-    constexpr Unit_flags(Backing val) noexcept :
+    constexpr Unit_flags(Underlying val) noexcept :
       val_(val) {
 
     }
 
-
-    enum class Affiliation : Backing {
+    enum class Affiliation : Underlying {
       mine = 0x00000001,
       party = 0x00000002,
       raid = 0x00000004,
       outsider = 0x00000008
     };
-    enum class Reaction : Backing {
+    enum class Reaction : Underlying {
       friendly = 0x00000010,
       neutral = 0x00000020,
       hostile = 0x00000040
     };
-    enum class Ownership : Backing {
+    enum class Ownership : Underlying {
       player = 0x00000100,
       npc = 0x00000200
     };
-    enum class Unit_type : Backing {
+    enum class Unit_type : Underlying {
       player = 0x00000400,
       npc = 0x00000800,
       pet = 0x00001000,
       guardian = 0x00002000,
       object = 0x00004000
     };
-    enum class Special_cases : Backing {
+    enum class Special_cases : Underlying {
       target = 0x00010000,
       focus = 0x00020000,
       main_tank = 0x00040000,
@@ -46,33 +45,34 @@ namespace clogparser {
     };
 
     constexpr bool is(Affiliation test) const noexcept {
-      return (val_ & static_cast<Backing>(test)) != 0;
+      return (val_ & static_cast<Underlying>(test)) != 0;
     }
     constexpr bool is(Reaction test) const noexcept {
-      return (val_ & static_cast<Backing>(test)) != 0;
+      return (val_ & static_cast<Underlying>(test)) != 0;
     }
     constexpr bool is(Ownership test) const noexcept {
-      return (val_ & static_cast<Backing>(test)) != 0;
+      return (val_ & static_cast<Underlying>(test)) != 0;
     }
     constexpr bool is(Unit_type test) const noexcept {
-      return (val_ & static_cast<Backing>(test)) != 0;
+      return (val_ & static_cast<Underlying>(test)) != 0;
     }
     constexpr bool is(Special_cases test) const noexcept {
-      return (val_ & static_cast<Backing>(test)) != 0;
+      return (val_ & static_cast<Underlying>(test)) != 0;
     }
 
   private:
-    Backing val_;
+    Underlying val_;
   };
 
   struct Raid_flags {
   public:
-    constexpr Raid_flags(std::uint32_t val) :
+    using Underlying_type = std::uint32_t;
+    constexpr Raid_flags(Underlying_type val) :
       val_(val) {
 
     }
 
-    enum class Marker : std::uint32_t {
+    enum class Marker : Underlying_type {
       star = 0x00000001,
       circle = 0x00000002,
       diamond = 0x00000004,
@@ -83,20 +83,23 @@ namespace clogparser {
       skull = 0x00000080
     };
 
-    constexpr bool is(Marker) const noexcept;
+    constexpr bool is(Marker test) const noexcept {
+      return (val_ & static_cast<Underlying_type>(test)) != 0;
+    }
 
   private:
-    std::uint32_t val_;
+    Underlying_type val_;
   };
 
   struct Spell_schools {
   public:
-    constexpr Spell_schools(std::uint8_t val) :
+    using Underlying_type = std::uint8_t;
+    constexpr Spell_schools(Underlying_type val) :
       val_(val) {
 
     }
 
-    enum class School : std::uint8_t {
+    enum class School : Underlying_type {
       physical = 0x01,
       holy = 0x02,
       fire = 0x04,
@@ -106,10 +109,12 @@ namespace clogparser {
       arcane = 0x40
     };
 
-    constexpr bool is(School) const noexcept;
+    constexpr bool is(School test) const noexcept {
+      return (val_ & static_cast<Underlying_type>(test)) != 0;
+    }
 
   private:
-    std::uint8_t val_;
+    Underlying_type val_;
   };
 
   enum class Power_types {

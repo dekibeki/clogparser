@@ -454,8 +454,8 @@ events::Unit clogparser::internal::Parse<events::Unit>::parse(helpers::Columns_s
   return events::Unit{
     columns[0],
     columns[1],
-    Unit_flags(helpers::parseInt<std::uint32_t>(columns[2])),
-    Raid_flags(helpers::parseInt<std::uint32_t>(columns[3]))
+    Unit_flags(helpers::parseInt<Unit_flags::Underlying>(columns[2])),
+    Raid_flags(helpers::parseInt<Raid_flags::Underlying_type>(columns[3]))
   };
 }
 events::Combat_header clogparser::internal::Parse<events::Combat_header>::parse(helpers::Columns_span columns) {
@@ -476,7 +476,7 @@ events::Spell_info clogparser::internal::Parse<events::Spell_info>::parse(helper
   return events::Spell_info{
     helpers::parseInt<std::uint64_t>(columns[0]),
     columns[1],
-    Spell_schools(helpers::parseInt<std::uint8_t>(columns[2]))
+    Spell_schools(helpers::parseInt<Spell_schools::Underlying_type>(columns[2]))
   };
 }
 events::Advanced_info clogparser::internal::Parse<events::Advanced_info>::parse(helpers::Columns_span columns) {
@@ -513,7 +513,7 @@ events::Damage clogparser::internal::Parse<events::Damage>::parse(helpers::Colum
     helpers::parseInt<std::int64_t>(columns[0]),
     helpers::parseInt<std::int64_t>(columns[1]),
     helpers::parseInt<std::int64_t>(columns[2]),
-    Spell_schools(helpers::parseInt<std::uint8_t>(columns[3])),
+    Spell_schools(helpers::parseInt<Spell_schools::Underlying_type>(columns[3])),
     helpers::parseInt<std::int64_t>(columns[4]),
     helpers::parseInt<std::uint64_t>(columns[5]),
     helpers::parseInt<std::int32_t>(columns[6]),
