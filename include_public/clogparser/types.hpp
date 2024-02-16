@@ -336,3 +336,8 @@ namespace clogparser {
 
   using Stats = Enum_indexed_array<Attribute_rating, std::int32_t, Attribute_rating::COUNT>;
 }
+
+constexpr clogparser::Spell_schools::School operator|(clogparser::Spell_schools::School s1, clogparser::Spell_schools::School s2) noexcept {
+  using Underlying_type = clogparser::Spell_schools::Underlying_type;
+  return static_cast<clogparser::Spell_schools::School>(static_cast<Underlying_type>(s1) | static_cast<Underlying_type>(s2));
+}
