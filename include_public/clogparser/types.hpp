@@ -94,11 +94,7 @@ namespace clogparser {
   struct Spell_schools {
   public:
     using Underlying_type = std::uint8_t;
-    constexpr Spell_schools(Underlying_type val) :
-      val_(val) {
-
-    }
-
+    
     enum class School : Underlying_type {
       physical = 0x01,
       holy = 0x02,
@@ -108,6 +104,15 @@ namespace clogparser {
       shadow = 0x20,
       arcane = 0x40
     };
+    
+    constexpr Spell_schools(Underlying_type val) :
+      val_(val) {
+
+    }
+    constexpr Spell_schools(School val) :
+      val_(static_cast<Underlying_type>(val)) {
+
+    }
 
     constexpr bool is(School test) const noexcept {
       return (val_ & static_cast<Underlying_type>(test)) != 0;
