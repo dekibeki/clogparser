@@ -14,6 +14,8 @@
 #include <clogparser/item.hpp>
 
 namespace clogparser {
+  using Period = std::chrono::milliseconds;
+
   struct Timestamp {
     std::uint8_t month;
     std::uint8_t day;
@@ -23,7 +25,7 @@ namespace clogparser {
     std::uint16_t millisecond;
 
     //assumes both timestamps are +- 24 hours
-    std::chrono::milliseconds operator-(Timestamp const& other) const noexcept;
+    Period operator-(Timestamp const& other) const noexcept;
   };
 
   constexpr bool is_invalid_guid(std::string_view in) {
@@ -107,14 +109,7 @@ namespace clogparser {
         std::uint8_t patch;
         std::uint8_t minor;
 
-        constexpr bool operator==(Build_version const& other) const noexcept {
-          return other.expac == expac
-            && other.patch == patch
-            && other.minor == minor;
-        }
-        constexpr bool operator!=(Build_version const& other) const noexcept {
-          return !this->operator==(other);
-        }
+        constexpr std::strong_ordering operator<=>(Build_version const&) const noexcept = default;
       } build_version;
       std::uint8_t project_id;
     };
@@ -125,8 +120,17 @@ namespace clogparser {
       Combat_header combat_header;
       Spell_info spell;
 
-      std::string_view aura_type;
+      Aura_type aura_type;
       std::optional<std::uint64_t> remaining_points;
+    };
+    struct Spell_aura_applied_dose {
+      static constexpr std::string_view NAME = "SPELL_AURA_APPLIED_DOSE";
+      static constexpr std::size_t COLUMNS_COUNT = Combat_header::COLUMNS_COUNT + Spell_info::COLUMNS_COUNT + 2;
+      Combat_header combat_header;
+      Spell_info spell;
+
+      Aura_type aura_type;
+      std::uint8_t new_dosage;
     };
     struct Spell_aura_refresh {
       static constexpr std::string_view NAME = "SPELL_AURA_REFRESH";
@@ -134,7 +138,7 @@ namespace clogparser {
       Combat_header combat_header;
       Spell_info spell;
 
-      std::string_view aura_type;
+      Aura_type aura_type;
       std::optional<std::uint64_t> remaining_points;
     };
     struct Spell_aura_removed {
@@ -142,8 +146,18 @@ namespace clogparser {
       static constexpr std::size_t COLUMNS_COUNT = Combat_header::COLUMNS_COUNT + Spell_info::COLUMNS_COUNT + 2;
       Combat_header combat_header;
       Spell_info spell;
+
       std::string_view aura_type;
       std::optional<std::uint64_t> remaining_points;
+    };
+    struct Spell_aura_removed_dose {
+      static constexpr std::string_view NAME = "SPELL_AURA_REMOVED_DOSE";
+      static constexpr std::size_t COLUMNS_COUNT = Combat_header::COLUMNS_COUNT + Spell_info::COLUMNS_COUNT + 2;
+      Combat_header combat_header;
+      Spell_info spell;
+
+      Aura_type aura_type;
+      std::uint8_t new_dosage;
     };
     struct Spell_periodic_damage {
       static constexpr std::string_view NAME = "SPELL_PERIODIC_DAMAGE";
@@ -398,37 +412,28 @@ namespace clogparser {
       std::uint32_t tier;
     };
 
-    namespace impl {
-      constexpr std::size_t invalid_index = std::numeric_limits<std::size_t>::max();
+    struct Unit_died {
+      static constexpr std::string_view NAME = "UNIT_DIED";
+      static constexpr std::size_t COLUMNS_COUNT = Combat_header::COLUMNS_COUNT + 1;
+      Combat_header combat_header;
+      bool unconscious_on_death;
+    };
 
-      template<typename Checking, typename Variant>
-      struct Variant_type_index;
+    struct Spell_resurrect {
+      static constexpr std::string_view NAME = "SPELL_RESURRECT";
+      static constexpr std::size_t COLUMNS_COUNT = Combat_header::COLUMNS_COUNT + Spell_info::COLUMNS_COUNT;
 
-      template<typename Checking, typename Variant>
-      constexpr std::size_t variant_type_index = Variant_type_index<Checking, Variant>::value;
-
-      template<typename Checking, typename ...Rest>
-      struct Variant_type_index<Checking, std::variant<Checking, Rest...>> {
-        static constexpr std::size_t value = 0;
-      };
-
-      template<typename Checking>
-      struct Variant_type_index<Checking, std::variant<>> {
-        static constexpr std::size_t value = invalid_index;
-      };
-
-      template<typename Checking, typename First, typename ...Rest>
-      struct Variant_type_index<Checking, std::variant<First, Rest...>> {
-        static constexpr std::size_t value = 1 + variant_type_index<Checking, std::variant<Rest...>>;
-        static_assert(value != invalid_index, "Can't find it");
-      };
-    }
+      Combat_header combat_header;
+      Spell_info spell;
+    };
 
     using Type = std::variant<
       Combat_log_version,
       Spell_aura_applied,
+      Spell_aura_applied_dose,
       Spell_aura_refresh,
       Spell_aura_removed,
+      Spell_aura_removed_dose,
       Spell_periodic_damage,
       Spell_periodic_damage_support,
       Spell_periodic_missed,
@@ -449,10 +454,9 @@ namespace clogparser {
       Combatant_info,
       Spell_summon,
       Zone_change,
-      Map_change>;
-
-    template<typename Choice>
-    constexpr std::size_t type = impl::variant_type_index<Choice, Type>;
+      Map_change,
+      Unit_died,
+      Spell_resurrect>;
   }
 
   namespace helpers {
@@ -484,6 +488,56 @@ namespace clogparser {
 
     using Columns_span = std::span<std::string_view>;
 
+    struct Parsed {
+      std::string_view rest;
+      bool found = false;
+      std::string_view found_str;
+    };
+
+    struct Parser {
+    public:
+      template<char delim, char... quotes>
+      Parsed parse_for(std::string_view in) {
+        std::string_view::size_type start = 0;
+
+        std::string_view::size_type found_char;
+
+        std::array<char, 1 + sizeof...(quotes)> search_string = { quotes..., delim };
+
+        Parsed returning;
+
+        for (;;) {
+          if (looking_for_quote_) {
+            found_char = in.find(*looking_for_quote_, start);
+          } else {
+            found_char = in.find_first_of(std::string_view{ search_string.data(), search_string.size() }, start);
+          }
+
+          if (found_char == std::string_view::npos) {
+            return returning;
+          } else if (in[found_char] != delim) { //isn't delim, must be a quote char
+            if (looking_for_quote_) {
+              looking_for_quote_.reset();
+            } else {
+              looking_for_quote_ = in[found_char];
+            }
+            start = found_char + 1;
+          } else { //is delim
+            assert(in[found_char] == delim);
+            assert(!looking_for_quote_);
+
+            returning.found_str = in.substr(0, found_char);
+            returning.rest = in.substr(found_char + 1);
+            returning.found = true;
+
+            return returning;
+          }
+        }
+      }
+    private:
+      std::optional<char> looking_for_quote_;
+    };
+
     Columns_span parse_array(Columns_span returning, std::string_view in);
     void parse_array(std::vector<std::string_view>& returning, std::string_view in);
     std::vector<std::string_view> parse_array(std::string_view in);
@@ -506,10 +560,6 @@ namespace clogparser {
       }
     };
 
-    struct Parse_state {
-      std::string saved;
-    };
-
     std::optional<Timestamp> parse_timestamp(std::string_view in);
 
     struct Partial_parse {
@@ -518,7 +568,7 @@ namespace clogparser {
       std::string_view data;
     };
 
-    std::optional<Partial_parse> parse_line(Parse_state& columns, std::string_view in);
+    std::optional<Partial_parse> parse_line(helpers::Parser& parser, std::string_view in);
 
     template<typename T>
     struct Parse {
@@ -531,9 +581,9 @@ namespace clogparser {
     template<typename First, typename ...Rest>
     struct Switch_partial_parse<std::variant<First, Rest...>> {
       template<typename Cb>
-      static void check(Partial_parse const& partial_parse, Cb&& cb) noexcept {
+      static void check(Partial_parse const& partial_parse, std::size_t start_of_line, Cb&& cb) noexcept {
         if (partial_parse.type == First::NAME) {
-          if constexpr (std::is_invocable_v<Cb, Timestamp, const First>) {
+          if constexpr (std::is_invocable_v<Cb, Timestamp, const First, std::size_t>) {
             const auto timestamp = parse_timestamp(partial_parse.time);
             if (!timestamp) { //we couldn't parse timestamp, just ignore this entry?
               return;
@@ -541,12 +591,12 @@ namespace clogparser {
             std::array<std::string_view, First::COLUMNS_COUNT> columns;
             const auto parsed_columns = helpers::parse_array(columns, partial_parse.data);
             const First data = Parse<First>::parse(parsed_columns);
-            cb(*timestamp, data);
+            cb(*timestamp, data, start_of_line);
           } else {
             //do nothing
           }
         } else {
-          Switch_partial_parse<std::variant<Rest...>>::check(partial_parse, std::forward<Cb>(cb));
+          Switch_partial_parse<std::variant<Rest...>>::check(partial_parse, start_of_line, std::forward<Cb>(cb));
         }
       }
     };
@@ -554,7 +604,7 @@ namespace clogparser {
     template<>
     struct Switch_partial_parse<std::variant<>> {
       template<typename Cb>
-      static void check(Partial_parse const& partial_parse, Cb&&) noexcept {
+      static void check(Partial_parse const& partial_parse, std::size_t start_of_line, Cb&&) noexcept {
 
       }
     };
@@ -566,8 +616,10 @@ namespace clogparser {
 
     events::Combat_log_version get(events::Combat_log_version);
     events::Spell_aura_applied get(events::Spell_aura_applied);
+    events::Spell_aura_applied_dose get(events::Spell_aura_applied_dose);
     events::Spell_aura_refresh get(events::Spell_aura_refresh);
     events::Spell_aura_removed get(events::Spell_aura_removed);
+    events::Spell_aura_removed_dose get(events::Spell_aura_removed_dose);
     events::Spell_periodic_damage get(events::Spell_periodic_damage);
     events::Spell_periodic_missed get(events::Spell_periodic_missed);
     events::Spell_periodic_heal get(events::Spell_periodic_heal);
@@ -585,6 +637,8 @@ namespace clogparser {
     events::Spell_summon get(events::Spell_summon);
     events::Zone_change get(events::Zone_change);
     events::Map_change get(events::Map_change);
+    events::Unit_died get(events::Unit_died);
+    events::Spell_resurrect get(events::Spell_resurrect);
 
     template<typename T>
     std::vector<T> get(std::vector<T> in) noexcept {
@@ -613,7 +667,7 @@ namespace clogparser {
 
   struct Log {
     auto parsing_cb() noexcept {
-      return [this](Timestamp time, auto const& event) {
+      return [this](Timestamp time, auto const& event, std::size_t bytes_on) {
         this->events.push_back(Event{ time, store(this->store_, event) });
       };
     }
@@ -631,35 +685,40 @@ namespace clogparser {
     }
 
     void parse(std::string_view recved) {
-      std::size_t start = 0;
+      helpers::Parsed res;
       std::optional<internal::Partial_parse> partial_parse;
-      for (std::string_view::size_type i = 0; i < recved.size(); ++i) {
-        if (recved[i] == '\n') {
-          if (state_.saved.empty()) {
-            partial_parse = internal::parse_line(state_, recved.substr(start, i - start));
-            start = i + 1;
-          } else {
-            partial_parse = internal::parse_line(state_, state_.saved);
-            state_.saved.clear();
-            start = i + 1;
-          }
 
-          if (partial_parse) {
-            internal::Switch_partial_parse<events::Type>::check(*partial_parse, cb_);
-          }
+      while ((res = parser_.parse_for<'\n', '"'>(recved)).found) {
+        auto found_str_size = 1; //start with 1 for \n
+        if (!res.found_str.empty() && res.found_str.back() == '\r') {
+          res.found_str = res.found_str.substr(0, res.found_str.size() - 1);
+          found_str_size++;
+        }
+        if (saved_.empty()) {
+          found_str_size += res.found_str.size();
+          partial_parse = internal::parse_line(parser_, res.found_str);
         } else {
-          if (!state_.saved.empty()) {
-            state_.saved.push_back(recved[i]);
+          saved_.append(res.found_str);
+          found_str_size += saved_.size();
+          partial_parse = internal::parse_line(parser_, saved_);
+        }
+
+        if (partial_parse) {
+          internal::Switch_partial_parse<events::Type>::check(*partial_parse, bytes_parsed_, cb_);
+          if (!saved_.empty()) {
+            saved_.clear();
           }
         }
+
+        bytes_parsed_ += found_str_size;
+        recved = res.rest;
       }
-      if (state_.saved.empty()) {
-        state_.saved.reserve(recved.size() - start);
-        state_.saved.append(recved.data() + start, recved.size() - start);
-      }
+      saved_.append(recved);
     }
   private:
     Cb cb_;
-    internal::Parse_state state_;
+    helpers::Parser parser_;
+    std::string saved_;
+    std::size_t bytes_parsed_ = 0;
   };
 }

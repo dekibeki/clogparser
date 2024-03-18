@@ -12,6 +12,9 @@
 namespace events = clogparser::events;
 
 namespace {
+  constexpr std::string_view AURA_TYPE_BUFF = "BUFF";
+  constexpr std::string_view AURA_TYPE_DEBUFF = "DEBUFF";
+
   events::Unit convert(clogparser::String_store& store, events::Unit in) {
     return {
       store.get(in.guid),
@@ -125,6 +128,15 @@ namespace {
     return returning;
   }
 
+  clogparser::Aura_type parse_aura_type(std::string_view in) {
+    if (in == AURA_TYPE_BUFF) {
+      return clogparser::Aura_type::buff;
+    } else {
+      assert(in == AURA_TYPE_DEBUFF);
+      return clogparser::Aura_type::debuff;
+    }
+  }
+
   std::vector<clogparser::events::Combatant_info::Talent> parse_talents(std::string_view in) {
     std::vector<clogparser::events::Combatant_info::Talent> returning;
 
@@ -204,6 +216,8 @@ std::size_t clogparser::internal::String_hash::operator()(std::string_view str) 
 }
 
 clogparser::helpers::Columns_span clogparser::helpers::parse_array(Columns_span returning, std::string_view in) {
+
+
   std::string_view::size_type found = 0;
   bool quoted = false;
 
@@ -411,7 +425,7 @@ std::optional<clogparser::Timestamp> clogparser::internal::parse_timestamp(std::
   }
 }
 
-std::optional<clogparser::internal::Partial_parse> clogparser::internal::parse_line(Parse_state& state, std::string_view in) {
+std::optional<clogparser::internal::Partial_parse> clogparser::internal::parse_line(helpers::Parser& parser, std::string_view in) {
   const auto end_timestamp = in.find("  ");
   if (end_timestamp == std::string_view::npos) {
     fprintf(stdout, "Couldn't find timestamp in line: %.*s\n", (std::uint32_t)in.size(), in.data());
@@ -427,11 +441,6 @@ std::optional<clogparser::internal::Partial_parse> clogparser::internal::parse_l
   }
   const std::string_view type_str = in.substr(0, end_type);
   in = in.substr(end_type + 1);
-
-  const std::optional<Timestamp> parsed_time = parse_timestamp(timestamp_str);
-  if (!parsed_time) {
-    return std::nullopt;
-  }
 
   return Partial_parse{ timestamp_str, type_str, in};
 }
@@ -576,33 +585,44 @@ events::Spell_aura_applied clogparser::internal::Parse<events::Spell_aura_applie
     return {
       Parse<events::Combat_header>::parse(columns.subspan(0,8)),
       Parse<events::Spell_info>::parse(columns.subspan(8,3)),
-      columns[11],
+      parse_aura_type(columns[11]),
       std::nullopt
     };
   } else if (columns.size() > 12) {
     return {
       Parse<events::Combat_header>::parse(columns.subspan(0,8)),
       Parse<events::Spell_info>::parse(columns.subspan(8,3)),
-      columns[11],
+      parse_aura_type(columns[11]),
       helpers::parseInt<std::uint64_t>(columns[12])
     };
   } else {
     throw std::exception{"Not enough columns for spell aura applied"};
   }
 }
+events::Spell_aura_applied_dose clogparser::internal::Parse<events::Spell_aura_applied_dose>::parse(helpers::Columns_span columns) {
+  if (columns.size() != events::Spell_aura_applied_dose::COLUMNS_COUNT) {
+    throw std::exception{ "Not enough columns for a spell aura applied dose" };
+  }
+  return {
+    Parse<events::Combat_header>::parse(columns.subspan(0,8)),
+    Parse<events::Spell_info>::parse(columns.subspan(8,3)),
+    parse_aura_type(columns[11]),
+    helpers::parseInt<std::uint8_t>(columns[12])
+  };
+}
 events::Spell_aura_refresh clogparser::internal::Parse<events::Spell_aura_refresh>::parse(helpers::Columns_span columns) {
   if (columns.size() == 12) {
     return {
       Parse<events::Combat_header>::parse(columns.subspan(0,8)),
       Parse<events::Spell_info>::parse(columns.subspan(8,3)),
-      columns[11],
+      parse_aura_type(columns[11]),
       std::nullopt
     };
   } else if (columns.size() > 12) {
     return {
       Parse<events::Combat_header>::parse(columns.subspan(0,8)),
       Parse<events::Spell_info>::parse(columns.subspan(8,3)),
-      columns[11],
+      parse_aura_type(columns[11]),
       helpers::parseInt<std::uint64_t>(columns[12])
     };
   } else {
@@ -627,6 +647,17 @@ events::Spell_aura_removed clogparser::internal::Parse<events::Spell_aura_remove
   } else {
     throw std::exception{"Not enough columns for spell aura applied"};
   }
+}
+events::Spell_aura_removed_dose clogparser::internal::Parse<events::Spell_aura_removed_dose>::parse(helpers::Columns_span columns) {
+  if (columns.size() != events::Spell_aura_applied_dose::COLUMNS_COUNT) {
+    throw std::exception{ "Not enough columns for a spell aura removed dose" };
+  }
+  return {
+    Parse<events::Combat_header>::parse(columns.subspan(0,8)),
+    Parse<events::Spell_info>::parse(columns.subspan(8,3)),
+    parse_aura_type(columns[11]),
+    helpers::parseInt<std::uint8_t>(columns[12])
+  };
 }
 events::Spell_periodic_damage clogparser::internal::Parse<events::Spell_periodic_damage>::parse(helpers::Columns_span columns) {
   if (columns.size() < events::Spell_periodic_damage::COLUMNS_COUNT) {
@@ -953,6 +984,24 @@ events::Map_change clogparser::internal::Parse<events::Map_change>::parse(helper
     helpers::parseInt<float>(columns[5])
   };
 }
+events::Unit_died clogparser::internal::Parse<events::Unit_died>::parse(helpers::Columns_span columns) {
+  if (columns.size() < events::Unit_died::COLUMNS_COUNT) {
+    throw std::exception("Not enough columns for a unit died");
+  }
+  return {
+    Parse<events::Combat_header>::parse(columns.subspan(0,8)),
+    helpers::parseInt<bool>(columns[8])
+  };
+}
+events::Spell_resurrect clogparser::internal::Parse<events::Spell_resurrect>::parse(helpers::Columns_span columns) {
+  if (columns.size() < events::Spell_resurrect::COLUMNS_COUNT) {
+    throw std::exception("Not enough columns for a spell resurrect");
+  }
+  return {
+    Parse<events::Combat_header>::parse(columns.subspan(0,8)),
+    Parse<events::Spell_info>::parse(columns.subspan(8,3))
+  };
+}
 
 std::string_view clogparser::String_store::get(std::string_view in) noexcept {
   return *store_.emplace(in).first;
@@ -965,15 +1014,23 @@ events::Spell_aura_applied clogparser::String_store::get(events::Spell_aura_appl
   return {
     ::convert(*this, in.combat_header),
     ::convert(*this, in.spell),
-    get(in.aura_type),
+    in.aura_type,
     in.remaining_points
+  };
+}
+events::Spell_aura_applied_dose clogparser::String_store::get(events::Spell_aura_applied_dose in) {
+  return {
+    ::convert(*this, in.combat_header),
+    ::convert(*this, in.spell),
+    in.aura_type,
+    in.new_dosage
   };
 }
 events::Spell_aura_refresh clogparser::String_store::get(events::Spell_aura_refresh in) {
   return {
     ::convert(*this, in.combat_header),
     ::convert(*this, in.spell),
-    get(in.aura_type),
+    in.aura_type,
     in.remaining_points
   };
 }
@@ -981,8 +1038,16 @@ events::Spell_aura_removed clogparser::String_store::get(events::Spell_aura_remo
   return {
     ::convert(*this, in.combat_header),
     ::convert(*this, in.spell),
-    get(in.aura_type),
+    in.aura_type,
     in.remaining_points
+  };
+}
+events::Spell_aura_removed_dose clogparser::String_store::get(events::Spell_aura_removed_dose in) {
+  return {
+    ::convert(*this, in.combat_header),
+    ::convert(*this, in.spell),
+    in.aura_type,
+    in.new_dosage
   };
 }
 events::Spell_periodic_damage clogparser::String_store::get(events::Spell_periodic_damage in) {
@@ -1148,6 +1213,18 @@ events::Map_change clogparser::String_store::get(events::Map_change in) {
     in.x_max,
     in.y_min,
     in.y_max
+  };
+}
+events::Unit_died clogparser::String_store::get(events::Unit_died in) {
+  return {
+    ::convert(*this, in.combat_header),
+    in.unconscious_on_death
+  };
+}
+events::Spell_resurrect clogparser::String_store::get(events::Spell_resurrect in) {
+  return {
+    ::convert(*this, in.combat_header),
+    ::convert(*this, in.spell)
   };
 }
 

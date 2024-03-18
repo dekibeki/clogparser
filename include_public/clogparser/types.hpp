@@ -91,10 +91,15 @@ namespace clogparser {
     Underlying_type val_;
   };
 
+  enum class Aura_type {
+    buff,
+    debuff
+  };
+
   struct Spell_schools {
   public:
     using Underlying_type = std::uint8_t;
-    
+
     enum class School : Underlying_type {
       physical = 0x01,
       holy = 0x02,
@@ -200,6 +205,8 @@ namespace clogparser {
   };
 
   enum class SpecId : std::uint16_t {
+    invalid = 0,
+
     dk_blood = 250,
     dk_frost = 251,
     dk_unholy = 252,
@@ -299,16 +306,22 @@ namespace clogparser {
   template<typename Indexer, typename T, Indexer _size>
   struct Enum_indexed_array {
     constexpr static std::size_t size = static_cast<std::underlying_type_t<Indexer>>(_size);
+    using value_type = T;
 
-    Enum_indexed_array() :
+    constexpr Enum_indexed_array() :
       vals_{ T{} } {
 
     }
 
-    Enum_indexed_array(std::initializer_list<T> init_list) {
+    constexpr Enum_indexed_array(std::initializer_list<T> init_list) {
       assert(init_list.size() == size);
       std::copy(init_list.begin(), init_list.end(), vals_.begin());
     }
+    constexpr Enum_indexed_array(Enum_indexed_array const&) = default;
+    constexpr Enum_indexed_array(Enum_indexed_array&&) = default;
+
+    constexpr Enum_indexed_array& operator=(Enum_indexed_array const&) = default;
+    constexpr Enum_indexed_array& operator=(Enum_indexed_array&&) = default;
 
     constexpr T& operator[](Indexer i) noexcept {
       return vals_[static_cast<std::underlying_type_t<Indexer>>(i)];
@@ -334,6 +347,66 @@ namespace clogparser {
     }
     constexpr auto cend() const noexcept {
       return vals_.end();
+    }
+
+    constexpr bool operator==(Enum_indexed_array const& other) const noexcept {
+      for (std::size_t i = 0; i < size; ++i) {
+        if (vals_[i] != other.vals_[i]) {
+          return false;
+        }
+      }
+      return true;
+    }
+    constexpr bool operator!=(Enum_indexed_array const& other) const noexcept {
+      return !operator==(other);
+    }
+
+    constexpr Enum_indexed_array& operator+=(Enum_indexed_array const& other) noexcept {
+      for (std::size_t i = 0; i < size; ++i) {
+        vals_[i] += other.vals_[i];
+      }
+      return *this;
+    }
+    constexpr Enum_indexed_array operator+(Enum_indexed_array const& other) const noexcept {
+      Enum_indexed_array me{ *this };
+      me += other;
+      return me;
+    }
+
+    constexpr Enum_indexed_array& operator-=(Enum_indexed_array const& other) noexcept {
+      for (std::size_t i = 0; i < size; ++i) {
+        vals_[i] -= other.vals_[i];
+      }
+      return *this;
+    }
+    constexpr Enum_indexed_array operator-(Enum_indexed_array const& other) const noexcept {
+      Enum_indexed_array me{ *this };
+      me -= other;
+      return me;
+    }
+
+    constexpr Enum_indexed_array& operator*=(T const& v) noexcept {
+      for (std::size_t i = 0; i < size; ++i) {
+        vals_[i] *= v;
+      }
+      return *this;
+    }
+    constexpr Enum_indexed_array operator*(T const& v) const noexcept {
+      Enum_indexed_array me{ *this };
+      me *= v;
+      return me;
+    }
+
+    constexpr Enum_indexed_array& operator/=(T const& v) noexcept {
+      for (std::size_t i = 0; i < size; ++i) {
+        vals_[i] /= v;
+      }
+      return *this;
+    }
+    constexpr Enum_indexed_array operator/(T const& v) const noexcept {
+      Enum_indexed_array me{ *this };
+      me /= v;
+      return me;
     }
   private:
     std::array<T, size> vals_;
